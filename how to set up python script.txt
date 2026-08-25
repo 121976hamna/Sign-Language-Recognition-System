@@ -1,0 +1,327 @@
+DFRobotDFPlayerMini.h library
+
+first run the below code to arduino ide
+
+/////////////////////////////////////////////////////
+void setup() {
+  Serial.begin(9600);
+}
+
+void loop() {
+  int f1 = analogRead(A0);
+  int f2 = analogRead(A1);
+  int f3 = analogRead(A2);
+  int f4 = analogRead(A3);
+  int f5 = analogRead(A4);
+
+  Serial.print(f1); Serial.print(",");
+  Serial.print(f2); Serial.print(",");
+  Serial.print(f3); Serial.print(",");
+  Serial.print(f4); Serial.print(",");
+  Serial.println(f5);
+
+  delay(100);  // Adjust delay for smoother prediction
+}
+
+///////////////////////////////////////////////////////
+
+then close the serial monitor and open the vs code and create the python file and and upload the python code in it and run the python script
+collect_data.py
+
+///////////////////////////////////////////////////////
+import serial
+import csv
+import time
+import os
+
+# Set your port and baud rate
+arduino = serial.Serial('COM4', 9600)  # Change COM port as needed
+filename = 'urdu_gesture_data.csv'
+
+# Load existing data to prevent duplicates
+existing_data = set()
+
+if os.path.exists(filename):
+    with open(filename, 'r') as file:
+        reader = csv.reader(file)
+        next(reader)  # skip header
+        for row in reader:
+            existing_data.add(tuple(map(int, row[:5])))
+
+print("Starting gesture data collection...")
+
+# Open file for appending new data
+with open(filename, 'a', newline='') as file:
+    writer = csv.writer(file)
+    if os.stat(filename).st_size == 0:
+        writer.writerow(['f1', 'f2', 'f3', 'f4', 'f5', 'label'])
+
+    try:
+        while True:
+            print("\nShow a new gesture. Recording for 5 seconds...")
+            buffer = []
+            start_time = time.time()
+
+            while time.time() - start_time < 5:
+                if arduino.in_waiting:
+                    line = arduino.readline().decode().strip()
+                    if line:
+                        try:
+                            data = tuple(map(int, line.split(',')))
+                            if len(data) == 5 and data not in existing_data:
+                                buffer.append(data)
+                        except:
+                            continue
+
+            if buffer:
+                label = input(f"\nCaptured {len(buffer)} unique values. Enter alphabet name (or press Enter to skip): ")
+                if label:
+                    for row in buffer:
+                        writer.writerow(list(row) + [label])
+                        existing_data.add(row)
+                    print(f"✅ {len(buffer)} rows saved under label: {label}")
+                else:
+                    print("⛔ Skipped saving this batch.")
+            else:
+                print("⚠️ No new unique gesture data captured. Try again.")
+    except KeyboardInterrupt:
+        print("\n🛑 Data collection stopped.")
+////////////////////////////////////////////////////
+
+after running this code then create a new file named as train_model.py and upload the code and run 
+this python script to train the model based on the gestures performed in collect_data.py file
+
+train_model.py
+/////////////////////////////////////////////////
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report
+import joblib
+
+# Load the collected data
+df = pd.read_csv('urdu_gesture_data.csv')
+
+# Features and labels
+X = df[['f1', 'f2', 'f3', 'f4', 'f5']]
+y = df['label']
+
+# Split dataset
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train a Random Forest model (you can also try KNN or SVM)
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
+
+# Evaluate
+y_pred = model.predict(X_test)
+print(classification_report(y_test, y_pred))
+
+# Save the trained model
+joblib.dump(model, 'urdu_sign_model.pkl')
+print("✅ Model saved as 'urdu_sign_model.pkl'")
+
+////////////////////////////////////////////////////
+then go to Arduino ide and upload the main code which is tunning voices against each 
+alphabet using python script
+
+sign_language_flex_python.ino file
+///////////////////////////////////////////////////
+#include "SoftwareSerial.h"
+#include "DFRobotDFPlayerMini.h"
+
+static const uint8_t PIN_MP3_TX = 2;  // Connects to DFPlayer RX
+static const uint8_t PIN_MP3_RX = 3;  // Connects to DFPlayer TX
+SoftwareSerial softwareSerial(PIN_MP3_RX, PIN_MP3_TX);
+
+DFRobotDFPlayerMini player;
+
+const int flexPins[5] = { A0, A1, A2, A3, A4 };  // Flex sensor pins for left hand
+
+void setup() {
+  Serial.begin(9600);          // Communication with Python
+  softwareSerial.begin(9600);  // Communication with DFPlayer
+
+  if (player.begin(softwareSerial)) {
+    Serial.println("DFPlayer Ready");
+    player.volume(27);  // Set volume from 0 to 30
+  } else {
+    Serial.println("Connecting to DFPlayer Mini failed!");
+  }
+}
+
+void loop() {
+  if (Serial.available()) {
+    String command = Serial.readStringUntil('\n');
+    command.trim();
+
+    if (command == "Global") {
+      player.play(21);  // 0021.mp3
+    } else if (command == "Alif") {
+      player.play(1);
+    } else if (command == "Bay") {
+      player.play(2);
+    } else if (command == "Pay") {
+      player.play(3);
+    } else if (command == "Jeem") {
+      player.play(4);
+    } else if (command == "Chay") {
+      player.play(5);
+    } else if (command == "Hay") {
+      player.play(6);
+    } else if (command == "Daal") {
+      player.play(7);
+    } else if (command == "Dhaal") {
+      player.play(8);
+    } else if (command == "Zay") {
+      player.play(9);
+    } else if (command == "Seen") {
+      player.play(10);
+    } else if (command == "Sheen") {
+      player.play(11);
+    } else if (command == "Zoay") {
+      player.play(12);
+    } else if (command == "Ain") {
+      player.play(13);
+    } else if (command == "Fay") {
+      player.play(14);
+    } else if (command == "Kaaf") {
+      player.play(15);
+    } else if (command == "Laam") {
+      player.play(16);
+    } else if (command == "Meem") {
+      player.play(17);
+    } else if (command == "Noon") {
+      player.play(18);
+    } else if (command == "Vao") {
+      player.play(19);
+    } else if (command == "Hamza") {
+      player.play(20);
+    } else if (command == "GetData") {
+      // Read and send flex sensor values
+      String data = "";
+      for (int i = 0; i < 5; i++) {
+        data += String(analogRead(flexPins[i]));
+        if (i < 4) data += ",";  // For separating with commas
+      }
+      Serial.println(data);
+    }
+  }
+}
+/////////////////////////////////////////////////////////////////
+
+then run the final python script of live predictions of gestures which is
+
+predict_live.py
+///////////////////////////////////////////////////////////////
+import serial
+import joblib
+import time
+
+# Load trained model
+model = joblib.load('urdu_sign_model.pkl')
+
+# Connect to Arduino (update COM port if needed)
+arduino = serial.Serial('COM4', 9600)
+time.sleep(2)
+
+# All valid Urdu alphabet gestures
+valid_gestures = {
+    'Alif', 'Bay', 'Pay','Jeem', 'Chay','Hay','Daal', 'Dhaal', 'Zay', 'Seen', 'Sheen', 'Zoay',
+    'Ain','Fay','Kaaf', 'Laam', 'Meem','Noon','Vao', 'Hamza'
+}
+
+print("🔄 Urdu Flex Gesture System Started")
+
+# Play Global Message ONCE at start
+arduino.write(b"Global\n")
+print("🔊 Playing: Perform a gesture for an alphabet")
+time.sleep(5)  # Wait for Global message to finish
+
+previous_prediction = None
+
+# Threshold to detect if hand is at rest
+rest_threshold = 20  # You can adjust this
+last_values = [0, 0, 0, 0, 0]
+
+# Smoothing settings
+smooth_readings = []
+smooth_window_size = 3  # How many readings to average
+
+# Reminder settings
+reminder_interval = 10  # seconds
+last_gesture_time = time.time()  # Initialize with current time
+
+def is_hand_rest(current_values, last_values, threshold):
+    differences = [abs(c - l) for c, l in zip(current_values, last_values)]
+    return all(diff < threshold for diff in differences)
+
+def average_readings(readings):
+    # Take column-wise average
+    averaged = []
+    for i in range(5):  # 5 sensors
+        col = [reading[i] for reading in readings]
+        averaged.append(sum(col) // len(col))
+    return averaged
+
+try:
+    while True:
+        # Request sensor data
+        arduino.write(b"GetData\n")
+        time.sleep(0.3)  # Small delay to let Arduino respond
+
+        if arduino.in_waiting:
+            raw = arduino.readline().decode().strip()
+            print("📥 Raw Serial:", raw)
+
+            if any(skip in raw for skip in ["DFPlayer Ready", "Connecting"]):
+                continue
+
+            try:
+                values = list(map(int, raw.split(',')))
+                print("📦 Sensor Values:", values)
+
+                if len(values) == 5:
+                    # Check hand rest first
+                    if is_hand_rest(values, last_values, rest_threshold):
+                        print("🛌 Hand at Rest - No prediction")
+                        smooth_readings.clear()  # Clear buffer if resting
+                        # Also check reminder timer
+                        if time.time() - last_gesture_time > reminder_interval:
+                            arduino.write(b"Global\n")
+                            print("🔔 Reminder: Please perform a gesture")
+                            last_gesture_time = time.time()
+                        continue
+
+                    smooth_readings.append(values)
+
+                    # Keep only last N readings
+                    if len(smooth_readings) > smooth_window_size:
+                        smooth_readings.pop(0)
+
+                    if len(smooth_readings) == smooth_window_size:
+                        averaged_values = average_readings(smooth_readings)
+                        print("📊 Averaged Sensor Values:", averaged_values)
+
+                        prediction = model.predict([averaged_values])[0]
+                        print(f"🖐 Predicted: {prediction}")
+
+                        if prediction in valid_gestures:
+                            if prediction != previous_prediction:
+                                arduino.write((prediction + "\n").encode())
+                                print(f"🔊 Playing: {prediction}")
+                                previous_prediction = prediction
+                                last_gesture_time = time.time()  # Reset reminder timer
+                                time.sleep(0.5)  # Small delay after playing voice
+
+                        last_values = averaged_values  # Update last values
+
+            except Exception as e:
+                print("⚠️ Error:", e)
+
+except KeyboardInterrupt:
+    print("\n🛑 Program exited.")
+    arduino.close()
+/////////////////////////////////////////////////////////////////////////
+
+// This is it
